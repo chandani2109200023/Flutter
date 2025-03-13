@@ -1,0 +1,8 @@
+-keep class com.yourpackage.** { *; }
+-keep class androidx.** { *; }
+-keep class io.flutter.** { *; }
+-dontwarn com.yourpackage.**
+-dontwarn androidx.**
+-keep class android.database.sqlite.** { *; }
+-keepnames class android.database.sqlite.** { *; }
+-dontwarn android.database.sqlite.**

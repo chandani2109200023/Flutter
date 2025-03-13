@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="AgriveMart - Your marketplace for agricultural products">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="AgriveMart">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon for the web -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <!-- Title for the web page -->
+  <title>AgriveMart</title>
+
+  <!-- Web App Manifest -->
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Additional metadata (SEO) -->
+  <meta property="og:title" content="AgriveMart - Agricultural Marketplace">
+  <meta property="og:description" content="AgriveMart provides a seamless marketplace for agricultural products.">
+  <meta property="og:image" content="icons/Icon-192.png">
+  <meta property="og:url" content="https://www.agrivemart.com">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="AgriveMart">
+  <meta name="twitter:description" content="AgriveMart offers a great marketplace for agriculture-related products.">
+  <meta name="twitter:image" content="icons/Icon-192.png">
+
+  <!-- Inline script for web permissions -->
+  <script>
+    // Request notification permission
+    function requestNotificationPermission(callback) {
+      if (Notification.permission === 'granted') {
+        callback('granted');
+      } else {
+        Notification.requestPermission().then(function(permission) {
+          callback(permission);
+        });
+      }
+    }
+
+    // Get current geolocation permission
+    function getCurrentPosition(callback) {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function(position) {
+          callback(position.coords.latitude + ", " + position.coords.longitude);
+        }, function(error) {
+          callback(null, error.message);
+        });
+      } else {
+        callback(null, "Geolocation is not supported by this browser.");
+      }
+    }
+
+    // Example usage of the permission functions (this can be customized or called from your Dart code via JS interop)
+    requestNotificationPermission(function(permissionStatus) {
+      if (permissionStatus === 'granted') {
+        console.log('Notification permission granted.');
+      } else {
+        console.log('Notification permission denied.');
+      }
+    });
+
+    getCurrentPosition(function(position, error) {
+      if (position) {
+        console.log('Geolocation permission granted:', position);
+      } else {
+        console.log('Geolocation permission denied:', error);
+      }
+    });
+  </script>
+
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
