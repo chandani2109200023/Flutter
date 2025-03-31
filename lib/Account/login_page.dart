@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../forget_password/forgot_password.dart';
+import '../helper/storage_service.dart';
 import '../homepage/home_screen.dart';
 import 'sign_up.dart';
 
@@ -17,14 +19,13 @@ class _LoginPageState extends State<LoginPage> {
   String errorMessage = '';
   bool _isPasswordVisible = false;
 
-  final String loginUrl = 'https://sastabazar.onrender.com/api/user/login';
+  final String loginUrl = 'http://13.202.96.108/api/user/login';
 
   Future<void> loginUser() async {
     setState(() {
       errorMessage = '';
     });
 
-    // Validate if any field is empty
     if (phoneController.text.isEmpty || passwordController.text.isEmpty) {
       setState(() {
         errorMessage = 'Phone and Password are required';
@@ -47,12 +48,34 @@ class _LoginPageState extends State<LoginPage> {
         final token = responseData['token'];
         final user = responseData['user'];
 
-        SharedPreferences prefs = await SharedPreferences.getInstance();
-        await prefs.setString('token', token);
-        await prefs.setString('userName', user['name']);
-        await prefs.setString('phoneNumber', user['phone']);
-        await prefs.setString('userId', user['id']);
+        if (kIsWeb) {
+          // ✅ Store login state for Web
+          await StorageService.setItem('isLoggedIn', "true");
+          await StorageService.setItem('token', token);
+          await StorageService.setItem('userName', user['name']);
+          await StorageService.setItem('phoneNumber', user['phone']);
+          await StorageService.setItem('userId', user['id']);
 
+          print("🔹 Web Login Data Stored:");
+          print("isLoggedIn: ${await StorageService.getItem('isLoggedIn')}");
+          print("userName: ${await StorageService.getItem('userName')}");
+          print("phoneNumber: ${await StorageService.getItem('phoneNumber')}");
+        } else {
+          // ✅ Store login state for Mobile
+          SharedPreferences prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('isLoggedIn', true);
+          await prefs.setString('token', token);
+          await prefs.setString('userName', user['name']);
+          await prefs.setString('phoneNumber', user['phone']);
+          await prefs.setString('userId', user['id']);
+
+          print("🔹 Mobile Login Data Stored:");
+          print("isLoggedIn: ${prefs.getBool('isLoggedIn')}");
+          print("userName: ${prefs.getString('userName')}");
+          print("phoneNumber: ${prefs.getString('phoneNumber')}");
+        }
+
+        // ✅ Navigate to HomeScreen after saving login state
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => HomeScreen()),
@@ -225,7 +248,9 @@ class _LoginPageState extends State<LoginPage> {
                     children: [
                       Text(
                         "Don't have an account? ",
-                        style: TextStyle(fontSize: 14, color: const Color.fromARGB(179, 26, 25, 25)),
+                        style: TextStyle(
+                            fontSize: 14,
+                            color: const Color.fromARGB(179, 26, 25, 25)),
                       ),
                       GestureDetector(
                         onTap: () {

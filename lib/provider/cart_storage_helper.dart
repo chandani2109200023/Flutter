@@ -1,142 +1,151 @@
 import 'dart:convert';
 import 'dart:html' as html;
+import 'package:flutter/material.dart';
 import '../model/cart_web.dart';
 
-class CartStorageHelper {
-  // Save Cart data in sessionStorage
-  static void saveCartToSession(List<CartWeb> cartList) {
-    List<Map<String, dynamic>> cartMapList =
-        cartList.map((cart) => cart.toMap()).toList();
-    String cartJson = jsonEncode(cartMapList);
-    html.window.sessionStorage['cart'] = cartJson;
+class CartStorageHelper with ChangeNotifier {
+  List<CartWeb> _cartItems = [];
+  double _totalPrice = 0.0;
+  int _counter = 0;
+  Future<List<CartWeb>> _cart = Future.value([]);
+
+  List<CartWeb> get cartItems => _cartItems;
+  double get totalPrice => _totalPrice;
+  int get counter => _counter;
+  Future<List<CartWeb>> get cart => _cart;
+  int getCounter() => _counter;
+
+  CartStorageHelper() {
+    _loadCartFromLocalStorage();
   }
 
-  // Update quantity of a specific item in the cart
-  static Future<void> updateQuantity(int cartItemId, int newQuantity) async {
-    List<CartWeb> cartItems = getCartFromSession();
-
-    // Find the item in the cart using the item ID
-    CartWeb? cartItem = cartItems.firstWhere(
-      (item) => item.id == cartItemId,
-      orElse: () => throw Exception(
-          "Item not found in the cart."), // Throw error if item not found
-    );
-
-    // Update the quantity
-    cartItem.number = newQuantity;
-
-    // Save the updated cart back to sessionStorage
-    saveCartToSession(cartItems);
-  }
-
-  // Retrieve Cart data from sessionStorage
-  static List<CartWeb> getCartFromSession() {
-    String? cartJson = html.window.sessionStorage['cart'];
+  // Load cart items from localStorage
+  void _loadCartFromLocalStorage() {
+    String? cartJson = html.window.localStorage['cart'];
     if (cartJson != null) {
       List<dynamic> cartMapList = jsonDecode(cartJson);
-      return cartMapList.map((cartMap) => CartWeb.fromMap(cartMap)).toList();
+      _cartItems =
+          cartMapList.map((cartMap) => CartWeb.fromMap(cartMap)).toList();
+      _counter = int.tryParse(html.window.localStorage['counter'] ?? '0') ?? 0;
+      _totalPrice = _calculateTotalPrice();
     }
-    return [];
+    _cart = Future.value(_cartItems); // Ensure future is updated
+    notifyListeners();
   }
 
-  // Get the total price of all cart items from sessionStorage
-  static double getTotalPrice() {
-    String? storedTotalPrice = html.window.sessionStorage['totalPrice'];
-    if (storedTotalPrice != null) {
-      return double.tryParse(storedTotalPrice) ?? 0.0;
+  Future<List<CartWeb>> getCartFromLocal() async {
+    _loadCartFromLocalStorage();
+    return _cart;
+  }
+
+  void _saveCartToLocalStorage() {
+    html.window.localStorage['cart'] =
+        jsonEncode(_cartItems.map((cart) => cart.toMap()).toList());
+    html.window.localStorage['totalPrice'] = _totalPrice.toString();
+    html.window.localStorage['counter'] = _counter.toString();
+  }
+
+  void addItem(CartWeb cartItem) {
+    _cartItems.add(cartItem);
+    _totalPrice +=
+        (cartItem.price - (cartItem.price * cartItem.discount * 0.01));
+    _saveCartToLocalStorage();
+    notifyListeners();
+  }
+
+  void removeItem(CartWeb cartItem) {
+    _cartItems.removeWhere((item) => item.productId == cartItem.productId);
+    _totalPrice -=
+        (cartItem.price - (cartItem.price * cartItem.discount * 0.01));
+    _saveCartToLocalStorage();
+    notifyListeners();
+  }
+
+  Future<void> updateQuantity(String productId, int newQuantity) async {
+    if (newQuantity <= 0) {
+      throw ArgumentError("Quantity must be greater than 0");
     }
 
-    // If no total price is stored, calculate it from the cart items
-    List<CartWeb> cartItems = getCartFromSession();
-    double totalPrice = cartItems.fold(0.0, (total, cartItem) {
-      return total +
+    // Find the item in the cart list
+    int index = _cartItems.indexWhere((item) => item.productId == productId);
+    if (index == -1) throw Exception("Item not found in the cart.");
+
+    // Calculate old price
+    double oldPrice = (_cartItems[index].price * _cartItems[index].number) -
+        (_cartItems[index].price *
+            _cartItems[index].number *
+            _cartItems[index].discount *
+            0.01);
+
+    // Update the quantity
+    _cartItems[index].number = newQuantity;
+    print(newQuantity);
+    print(_cartItems[index].number);
+
+    // Calculate new price
+    double newPrice = (_cartItems[index].price * newQuantity) -
+        (_cartItems[index].price *
+            newQuantity *
+            _cartItems[index].discount *
+            0.01);
+
+    // Update total price
+    _totalPrice = _totalPrice - oldPrice + newPrice;
+
+    // Save updated cart to local storage
+    _saveCartToLocalStorage();
+
+    // Notify listeners if using Provider/State Management
+    notifyListeners();
+  }
+
+  void clearCart() {
+    _cartItems.clear();
+    _counter = 0;
+    _totalPrice = 0.0;
+    _saveCartToLocalStorage();
+    notifyListeners();
+  }
+
+  void addTotalPrice(double productPrice, int discount) {
+    _totalPrice += ((productPrice) - (productPrice * discount * 0.01));
+    _saveCartToLocalStorage();
+    notifyListeners();
+  }
+
+  void removeTotalPrice(double productPrice, int discount) {
+    _totalPrice -= ((productPrice) - (productPrice * discount * 0.01));
+    _saveCartToLocalStorage();
+    notifyListeners();
+  }
+
+  void updateTotalPrice(double oldPrice, double newPrice) {
+    _totalPrice = _totalPrice - oldPrice + newPrice;
+    _saveCartToLocalStorage();
+    notifyListeners();
+  }
+
+  double _calculateTotalPrice() {
+    return _cartItems.fold(0.0, (sum, cartItem) {
+      return sum +
           (cartItem.price * cartItem.number) -
           (cartItem.price * cartItem.number * cartItem.discount * 0.01);
     });
-
-    html.window.sessionStorage['totalPrice'] = totalPrice.toString();
-    return totalPrice;
   }
 
-  // Add total price when a new item is added to the cart
-  static void addTotalPrice(double productPrice, int discount) {
-    double currentTotalPrice = getTotalPrice();
-    currentTotalPrice += (productPrice - (productPrice * discount * 0.01));
-    html.window.sessionStorage['totalPrice'] = currentTotalPrice.toString();
-    saveCartToSession(getCartFromSession());
+  double getTotalPrice() => _totalPrice;
+
+  void addCounter() {
+    _counter++;
+    _saveCartToLocalStorage();
+    notifyListeners();
   }
 
-  // Remove total price when an item is removed from the cart
-  static void removeTotalPrice(double productPrice, int discount) {
-    double currentTotalPrice = getTotalPrice();
-    currentTotalPrice -= (productPrice - (productPrice * discount * 0.01));
-    html.window.sessionStorage['totalPrice'] = currentTotalPrice.toString();
-    saveCartToSession(getCartFromSession());
-  }
-
-  static void updateTotalPrice(double oldPrice, double newPrice) {
-    double totalPrice = getTotalPrice();
-    totalPrice = totalPrice - oldPrice + newPrice;
-    saveCartToSession(getCartFromSession()); // Save the cart after modification
-  }
-
-  // Add counter
-  static void addCounter() {
-    int currentCounter = getCounter();
-    currentCounter++;
-    html.window.sessionStorage['counter'] = currentCounter.toString();
-  }
-
-  // Remove counter
-  static void removeCounter() {
-    int currentCounter = getCounter();
-    if (currentCounter > 0) {
-      currentCounter--;
-      html.window.sessionStorage['counter'] = currentCounter.toString();
+  void removeCounter() {
+    if (_counter > 0) {
+      _counter--;
+      _saveCartToLocalStorage();
+      notifyListeners();
     }
-  }
-
-  // Update counter value
-  static void updateCounterValue(bool isIncrement) {
-    if (isIncrement) {
-      addCounter();
-    } else {
-      removeCounter();
-    }
-  }
-
-  // Handle adding/removing an item to/from the cart
-  static void addItem(CartWeb cartItem) {
-    List<CartWeb> cartItems = getCartFromSession();
-    cartItems.add(cartItem);
-    saveCartToSession(cartItems);
-    addCounter(); // Increment counter after adding an item
-  }
-
-  static void removeItem(CartWeb cartItem) {
-    List<CartWeb> cartItems = getCartFromSession();
-    cartItems.removeWhere((item) => item.productId == cartItem.productId);
-    saveCartToSession(cartItems);
-    removeCounter(); // Decrement counter after removing an item
-  }
-
-  // Clear all items from the cart
-  static void clearCart() {
-    html.window.sessionStorage.remove('cart');
-    html.window.sessionStorage.remove('counter');
-    html.window.sessionStorage.remove('totalPrice');
-  }
-
-  // Getter methods for counter and total price
-  static double getTotalPriceValue() {
-    return getTotalPrice();
-  }
-
-  static int getCounter() {
-    String? storedCounter = html.window.sessionStorage['counter'];
-    if (storedCounter != null) {
-      return int.tryParse(storedCounter) ?? 0;
-    }
-    return 0;
   }
 }

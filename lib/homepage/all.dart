@@ -1,14 +1,18 @@
 import 'dart:convert';
+import 'package:agrive_mart/provider/cart_storage_web.dart';
 import 'package:badges/badges.dart' as badges;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:math';
 
 import '../components/product_details_page.dart';
+import '../components/product_details_web_page.dart';
 import '../helper/db__helper.dart';
 import '../provider/cart_provider.dart';
 import '../screen/cart_screen.dart';
+import '../screen/cart_screen_web.dart';
 import '../screen/error_screen.dart';
 import '../widgets/product_grid.dart';
 import 'home_screen.dart';
@@ -42,7 +46,7 @@ class _AllProductsPageState extends State<AllProductsPage> {
   }
 
   Future<void> fetchProducts() async {
-    final url = Uri.parse('https://sastabazar.onrender.com/api/user/Products');
+    final url = Uri.parse('http://13.202.96.108/api/user/Products');
     try {
       final response = await http.get(url);
 
@@ -70,12 +74,17 @@ class _AllProductsPageState extends State<AllProductsPage> {
         });
       } else {
         setState(() {
-          errorMessage = "We are trying hard to get your products....";
+          errorMessage =
+              "We are trying hard to get your products....Keep Patience";
           isLoading = false;
         });
       }
     } catch (error) {
-      
+      setState(() {
+        errorMessage =
+            "We are trying hard to get your products.....Keep Patience!";
+        isLoading = false;
+      });
     }
   }
 
@@ -140,8 +149,8 @@ class _AllProductsPageState extends State<AllProductsPage> {
   @override
   Widget build(BuildContext context) {
     final cart = Provider.of<CartProvider>(context);
+    final cartWeb = Provider.of<CartStorageHelper>(context);
     if (errorMessage != null) {
-      // Navigate to the error page if an error occurs
       return ErrorPage(
         errorMessage: errorMessage!,
         onRetry: () {
@@ -153,6 +162,7 @@ class _AllProductsPageState extends State<AllProductsPage> {
         },
       );
     }
+    final isWeb = kIsWeb;
 
     return WillPopScope(
       onWillPop: _onWillPop,
@@ -189,26 +199,49 @@ class _AllProductsPageState extends State<AllProductsPage> {
                 },
               ),
               actions: [
-                InkWell(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      _createSlideTransitionRoute(
-                          const CartScreen()), // Add sliding effect here
-                    );
-                  },
-                  child: Center(
-                    child: badges.Badge(
-                      showBadge: cart.counter > 0,
-                      badgeContent: Text(
-                        cart.counter.toString(),
-                        style: const TextStyle(color: Colors.white),
+                if (isWeb) ...[
+                  InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        _createSlideTransitionRoute(
+                            CartScreenWeb()), // Slide transition for mobile
+                      );
+                    },
+                    child: Center(
+                      child: badges.Badge(
+                        showBadge: cartWeb.counter > 0,
+                        badgeContent: Text(
+                          cartWeb.counter.toString(),
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        child: const Icon(Icons.shopping_bag_outlined),
                       ),
-                      child: const Icon(Icons.shopping_bag_outlined),
                     ),
                   ),
-                ),
-                const SizedBox(width: 20.0),
+                  const SizedBox(width: 20.0),
+                ] else ...[
+                  InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        _createSlideTransitionRoute(
+                            const CartScreen()), // Slide transition for mobile
+                      );
+                    },
+                    child: Center(
+                      child: badges.Badge(
+                        showBadge: cart.counter > 0,
+                        badgeContent: Text(
+                          cart.counter.toString(),
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        child: const Icon(Icons.shopping_bag_outlined),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 20.0),
+                ]
               ],
             ),
           ),
@@ -254,18 +287,31 @@ class _AllProductsPageState extends State<AllProductsPage> {
                     ),
                     Expanded(
                       child: ProductGrid(
+                        cartWeb: cartWeb,
                         products: filteredProducts, // Show filtered products
                         dbHelper: dbHelper,
                         cart: cart,
                         onProductTap: (product) {
-                          // Navigate to ProductDetailsPage with the selected product data
-                          Navigator.push(
-                            context,
-                            _createSlideTransitionRoute(ProductDetailsPage(
+                          if (kIsWeb) {
+                            // For web, navigate using the web product details page
+                            Navigator.push(
+                              context,
+                              _createSlideTransitionRoute(
+                                ProductDetailsWebPage(
+                                    product: product, cart: cartWeb),
+                              ),
+                            );
+                          } else {
+                            // For mobile, use the existing navigation logic
+                            Navigator.push(
+                              context,
+                              _createSlideTransitionRoute(ProductDetailsPage(
                                 product: product,
                                 dbHelper: dbHelper,
-                                cart: cart)),
-                          );
+                                cart: cart,
+                              )),
+                            );
+                          }
                         },
                       ),
                     ),
@@ -274,7 +320,7 @@ class _AllProductsPageState extends State<AllProductsPage> {
               ),
         floatingActionButton: FloatingActionButton(
           onPressed: () async {
-            await clearCart(cart);
+            cartWeb.clearCart();
           },
           child: const Icon(Icons.clear_all),
         ),

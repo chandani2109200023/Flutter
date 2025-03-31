@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
+import 'package:agrive_mart/provider/cart_storage_web.dart';
 import 'package:flutter/material.dart';
 import '../helper/db__helper.dart';
 import '../pages/all_pages.dart';
@@ -199,7 +200,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
 
   Future<void> fetchSimilarProducts() async {
     final url = Uri.parse(
-        'https://sastabazar.onrender.com/api/user/Products/category/${widget.product['category']}');
+        'http://13.202.96.108/api/user/Products/category/${widget.product['category']}');
 
     try {
       final response = await http.get(url);
@@ -296,6 +297,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
 
   Widget buildProductDetails(BuildContext context) {
     final cart = Provider.of<CartProvider>(context);
+    final cartWeb = Provider.of<CartStorageHelper>(context);
     String description =
         widget.product['description'] ?? 'No description available.';
     String fullDescription = description +
@@ -550,6 +552,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                       ], // Show only one product at a time
                                       dbHelper: dbHelper,
                                       cart: cart,
+                                      cartWeb: cartWeb,
                                       onProductTap: (product) {
                                         Navigator.push(
                                           context,

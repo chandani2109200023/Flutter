@@ -1,18 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'helper/storage_service.dart';
 import 'provider/cart_provider.dart'; // Ensure this file exists and is correctly implemented
+import 'provider/cart_storage_web.dart';
 import 'splash/splash_screen.dart';
 
 void main() async {
   /// Ensure that Flutter bindings are initialized before calling asynchronous operations
   WidgetsFlutterBinding.ensureInitialized();
+  await StorageService.setItem('appStarted', 'true');
 
   /// Start the app
   runApp(
-    ChangeNotifierProvider(
-      create: (context) =>
-          CartProvider(), // Provide CartProvider to the widget tree
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => CartProvider()),
+        ChangeNotifierProvider(create: (context) => CartStorageHelper()),
+      ],
       child: const MyApp(),
     ),
   );

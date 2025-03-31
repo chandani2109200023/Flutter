@@ -1,13 +1,13 @@
-import 'dart:convert';
-import 'dart:html'; // Importing for localStorage
 import 'package:flutter/material.dart';
-import 'package:agrive_mart/provider/cart_storage_helper.dart'; // Import your helper
-import '../model/cart_web.dart'; // Import the CartWeb model
+import 'package:agrive_mart/provider/cart_storage_web.dart'; // Import CartStorageHelper
+import '../model/cart_web.dart'; // Import CartWeb model
 
 class ProductGridItemWeb extends StatefulWidget {
   final dynamic product;
+  final CartStorageHelper cart;
 
-  const ProductGridItemWeb({super.key, required this.product});
+  const ProductGridItemWeb(
+      {super.key, required this.product, required this.cart});
 
   @override
   State<ProductGridItemWeb> createState() => _ProductGridItemWebState();
@@ -22,16 +22,12 @@ class _ProductGridItemWebState extends State<ProductGridItemWeb> {
     fetchInitialCartCount();
   }
 
-  // Fetch the initial cart count when the product is first displayed
   void fetchInitialCartCount() {
-    final cartItems = _getCartListFromStorage();
+    final cartItems = widget.cart.cartItems;
     final existingItem = cartItems.firstWhere(
-      (item) =>
-          item.productId == (widget.product["id"] is int
-              ? widget.product["id"].toString()
-              : widget.product["id"] ?? ''),
+      (item) => item.productId == widget.product["id"].toString(),
       orElse: () => CartWeb(
-        productId: widget.product["id"] ?? '',
+        productId: widget.product["id"].toString(),
         description: widget.product["description"] ?? '',
         name: widget.product["name"] ?? '',
         stock: widget.product["stock"] ?? 0,
@@ -44,44 +40,22 @@ class _ProductGridItemWebState extends State<ProductGridItemWeb> {
         imageUrl: widget.product["imageUrl"] ?? '',
       ),
     );
-
     setState(() {
       itemCount = existingItem.number;
     });
   }
 
-  // Get cart list from localStorage (simulated by `localStorage` in Dart Web)
-  List<CartWeb> _getCartListFromStorage() {
-    final storedData =
-        window.localStorage['cart'] ?? '[]'; // Get stored cart data
-    final List<dynamic> dataList = jsonDecode(storedData);
-
-    return dataList.map((e) => CartWeb.fromMap(e)).toList();
-  }
-
-  // Save the cart to localStorage
-  void _saveCartToStorage(List<CartWeb> cartItems) {
-    final cartListJson = cartItems.map((item) => item.toMap()).toList();
-    window.localStorage['cart'] = jsonEncode(cartListJson);
-  }
-
-  // Add product to the cart
   Future<void> handleAddToCart() async {
-    try {
-      final cartItems = _getCartListFromStorage();
+    final cartItems = await widget.cart.cartItems;
+    if (cartItems
+        .any((item) => item.productId == widget.product["id"].toString())) {
+      return;
+    }
 
-      // Check if the product already exists in the cart
-      if (cartItems.any((item) =>
-          item.productId == (widget.product["id"] is int
-              ? widget.product["id"].toString()
-              : widget.product["id"] ?? ''))) {
-        return;
-      }
-
-      // Add product to cart
-      cartItems.add(CartWeb(
+    widget.cart.addItem(
+      CartWeb(
         id: null,
-        productId: widget.product["id"] ?? '',
+        productId: widget.product["id"].toString(),
         description: widget.product["description"] ?? '',
         name: widget.product["name"] ?? '',
         stock: widget.product["stock"] ?? 0,
@@ -92,34 +66,27 @@ class _ProductGridItemWebState extends State<ProductGridItemWeb> {
         number: 1,
         discount: widget.product["discount"] ?? 0,
         imageUrl: widget.product["imageUrl"] ?? '',
-      ));
+      ),
+    );
 
-      // Update cart and price
-      CartStorageHelper.addTotalPrice(
-          widget.product["price"].toDouble(), widget.product["discount"]);
-      CartStorageHelper.addCounter();
-
-      // Save to localStorage
-      _saveCartToStorage(cartItems);
-
-      setState(() {
-        itemCount = 1;
-      });
-    } catch (error) {
-      print('Error adding to cart: $error');
-    }
+    widget.cart.addTotalPrice(
+        widget.product["price"].toDouble(), widget.product["discount"]);
+    widget.cart.addCounter();
+    setState(() {
+      itemCount = 1;
+    });
   }
 
-  // Handle quantity changes for the product
   Future<void> handleQuantityChange(bool isIncrement) async {
     try {
       if (itemCount == null) return;
 
-      final cartItems = _getCartListFromStorage();
+      final cartItems = widget.cart.cartItems;
 
       final cartItem = cartItems.firstWhere(
         (item) =>
-            item.productId == (widget.product["id"] is int
+            item.productId ==
+            (widget.product["id"] is int
                 ? widget.product["id"].toString()
                 : widget.product["id"] ?? ''),
       );
@@ -128,36 +95,49 @@ class _ProductGridItemWebState extends State<ProductGridItemWeb> {
 
       if (newNumber < 1) {
         cartItems.removeWhere((item) => item.productId == cartItem.productId);
-        CartStorageHelper.removeCounter();
-        CartStorageHelper.removeTotalPrice(cartItem.price, cartItem.discount);
-
-        _saveCartToStorage(cartItems);
+        widget.cart.removeCounter();
+        widget.cart.removeTotalPrice(cartItem.price, cartItem.discount);
         setState(() {
           itemCount = 0;
         });
       } else if (newNumber <= cartItem.stock) {
-        cartItem.number = newNumber;
+        await widget.cart.updateQuantity(cartItem.productId, newNumber);
+
+        if (isIncrement) {
+          widget.cart.addCounter();
+        } else {
+          widget.cart.removeCounter();
+        }
 
         // Update cart and price
-        CartStorageHelper.updateTotalPrice(
+        widget.cart.updateTotalPrice(
           (cartItem.price * cartItem.number) -
               (cartItem.price * cartItem.number * cartItem.discount * 0.01),
           (cartItem.price * newNumber) -
               (cartItem.price * newNumber * cartItem.discount * 0.01),
         );
-
-        if (isIncrement) {
-          CartStorageHelper.addCounter();
-        } else {
-          CartStorageHelper.removeCounter();
-        }
-
-        // Save to localStorage
-        _saveCartToStorage(cartItems);
-
         setState(() {
           itemCount = newNumber;
         });
+      } else {
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text("Stock Limit Reached"),
+              content: Text(
+                  "You can only add up to ${cartItem.stock} items to the cart."),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text("OK"),
+                ),
+              ],
+            );
+          },
+        );
       }
     } catch (error) {
       print('Error updating quantity: $error');
@@ -169,6 +149,7 @@ class _ProductGridItemWebState extends State<ProductGridItemWeb> {
     final bool isOutOfStock = (widget.product['stock'] ?? 0) <= 0;
 
     return SingleChildScrollView(
+      // Wrap entire widget with SingleChildScrollView
       child: Container(
         decoration: BoxDecoration(
           color: isOutOfStock ? Colors.grey[300] : Colors.white,
@@ -280,55 +261,90 @@ class _ProductGridItemWebState extends State<ProductGridItemWeb> {
                   if (!isOutOfStock)
                     Align(
                       alignment: Alignment.centerRight,
-                      child: itemCount != null && itemCount! > 0
-                          ? Container(
-                              decoration: BoxDecoration(
-                                color: const Color.fromARGB(255, 175, 116, 76),
-                                borderRadius: BorderRadius.circular(5),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 5),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  InkWell(
-                                    onTap: () => handleQuantityChange(false),
-                                    child: const Icon(Icons.remove,
-                                        color: Colors.white),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    itemCount.toString(),
-                                    style: const TextStyle(
-                                        color: Colors.white, fontSize: 16),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  InkWell(
-                                    onTap: () => handleQuantityChange(true),
-                                    child: const Icon(Icons.add,
-                                        color: Colors.white),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : InkWell(
-                              onTap: handleAddToCart,
-                              child: Container(
-                                height: 35,
-                                width: 50,
-                                decoration: BoxDecoration(
-                                  color:
-                                      const Color.fromARGB(255, 175, 116, 76),
-                                  borderRadius: BorderRadius.circular(5),
-                                ),
-                                child: const Center(
-                                  child: Text(
-                                    'Add',
-                                    style: TextStyle(color: Colors.white),
-                                  ),
-                                ),
-                              ),
+                      child: FutureBuilder<List<CartWeb>>(
+                        future: widget.cart.getCartFromLocal(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const CircularProgressIndicator();
+                          }
+
+                          final cartItem = snapshot.data!.firstWhere(
+                            (item) =>
+                                item.productId ==
+                                (widget.product["id"] is int
+                                    ? widget.product["id"].toString()
+                                    : widget.product["id"]),
+                            orElse: () => CartWeb(
+                              id: null,
+                              productId: widget.product["id"] is int
+                                  ? widget.product["id"].toString()
+                                  : widget.product["id"],
+                              name: widget.product["name"],
+                              description: widget.product["description"] ?? "",
+                              price: widget.product["price"].toDouble(),
+                              discount: widget.product["discount"] ?? 0,
+                              quantity: widget.product["quantity"] ?? 0,
+                              number: 0,
+                              unit: widget.product["unit"],
+                              stock: widget.product["stock"] ?? 0,
+                              category: widget.product["category"] ?? "",
+                              imageUrl: widget.product["imageUrl"],
                             ),
+                          );
+
+                          return cartItem.number > 0
+                              ? Container(
+                                  decoration: BoxDecoration(
+                                    color:
+                                        const Color.fromARGB(255, 175, 116, 76),
+                                    borderRadius: BorderRadius.circular(5),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 5),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      InkWell(
+                                        onTap: () =>
+                                            handleQuantityChange(false),
+                                        child: const Icon(Icons.remove,
+                                            color: Colors.white),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        cartItem.number.toString(),
+                                        style: const TextStyle(
+                                            color: Colors.white, fontSize: 16),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      InkWell(
+                                        onTap: () => handleQuantityChange(true),
+                                        child: const Icon(Icons.add,
+                                            color: Colors.white),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : InkWell(
+                                  onTap: handleAddToCart,
+                                  child: Container(
+                                    height: 35,
+                                    width: 50,
+                                    decoration: BoxDecoration(
+                                      color: const Color.fromARGB(
+                                          255, 175, 116, 76),
+                                      borderRadius: BorderRadius.circular(5),
+                                    ),
+                                    child: const Center(
+                                      child: Text(
+                                        'Add',
+                                        style: TextStyle(color: Colors.white),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                        },
+                      ),
                     ),
                 ],
               ),

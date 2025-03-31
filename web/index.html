@@ -46,19 +46,6 @@
       }
     }
 
-    // Get current geolocation permission
-    function getCurrentPosition(callback) {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(function(position) {
-          callback(position.coords.latitude + ", " + position.coords.longitude);
-        }, function(error) {
-          callback(null, error.message);
-        });
-      } else {
-        callback(null, "Geolocation is not supported by this browser.");
-      }
-    }
-
     // Example usage of the permission functions (this can be customized or called from your Dart code via JS interop)
     requestNotificationPermission(function(permissionStatus) {
       if (permissionStatus === 'granted') {

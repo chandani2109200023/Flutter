@@ -51,7 +51,7 @@ class _PaymentPageState extends State<PaymentPage> {
 
     try {
       final response = await http.post(
-        Uri.parse('https://sastabazar.onrender.com/api/payment'),
+        Uri.parse('http://13.202.96.108/api/payment'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'amount': amount,
@@ -210,7 +210,7 @@ class _PaymentPageState extends State<PaymentPage> {
   Future<void> updateProductStock(Cart cart) async {
     try {
       final url = Uri.parse(
-          'https://sastabazar.onrender.com/api/user/products/${cart.productId}');
+          'http://13.202.96.108/api/user/products/${cart.productId}');
 
       final response = await http.patch(
         url,

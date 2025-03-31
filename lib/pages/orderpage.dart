@@ -35,7 +35,7 @@ class _OrdersPageState extends State<OrdersPage> {
   Future<void> _fetchOrders() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String? userId = prefs.getString('userId');
-    final url = 'https://sastabazar.onrender.com/api/payments/user/$userId';
+    final url = 'http://13.202.96.108/api/payments/user/$userId';
 
     try {
       final response = await http.get(Uri.parse(url));
@@ -46,7 +46,7 @@ class _OrdersPageState extends State<OrdersPage> {
         for (var order in orders) {
           final orderDetailsResponse = await http.get(
             Uri.parse(
-                'https://sastabazar.onrender.com/api/delivery/order/${order['orderId']}'),
+                'http://13.202.96.108/api/delivery/order/${order['orderId']}'),
           );
 
           if (orderDetailsResponse.statusCode == 200) {

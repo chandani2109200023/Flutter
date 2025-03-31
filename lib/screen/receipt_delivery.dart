@@ -41,7 +41,7 @@ class _ReceiptDeliveryPageState extends State<ReceiptDeliveryPage> {
 
   Future<void> _fetchOrderDetails() async {
     final String orderApiUrl =
-        'https://sastabazar.onrender.com/api/delivery/order/${widget.orderId}';
+        'http://13.202.96.108/api/delivery/order/${widget.orderId}';
 
     try {
       final orderResponse = await http.get(Uri.parse(orderApiUrl));

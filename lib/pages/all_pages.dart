@@ -15,9 +15,8 @@ import '../../screen/cart_screen.dart';
 import '../../widgets/product_grid.dart';
 import '../components/product_details_web_page.dart';
 import '../model/cart_model.dart';
-import '../provider/cart_storage_helper.dart';
+import '../provider/cart_storage_web.dart';
 import '../screen/error_screen.dart';
-
 class All_pages extends StatefulWidget {
   final String name;
   const All_pages({super.key, required this.name});
@@ -27,6 +26,7 @@ class All_pages extends StatefulWidget {
 }
 
 class _AllPagesState extends State<All_pages> {
+  CartStorageHelper cartStorageHelper = CartStorageHelper();
   List<dynamic> products = [];
   List<dynamic> filteredProducts = [];
   bool isLoading = true;
@@ -34,22 +34,13 @@ class _AllPagesState extends State<All_pages> {
   final DBHelper dbHelper = DBHelper();
   late Future<List<Cart>> cartItemsFuture;
   TextEditingController searchController = TextEditingController();
-  int cartCounterWeb = 0; // Store cart counter for web
+  late int cartCounterWeb; // Store cart counter for web
 
   @override
   void initState() {
     super.initState();
     fetchProducts();
     searchController.addListener(_filterProducts);
-    cartCounterWeb = CartStorageHelper.getCounter();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Ensure that the counter is updated when the page is resumed
-    cartCounterWeb = CartStorageHelper.getCounter();
-    setState(() {});
   }
 
   @override
@@ -60,7 +51,7 @@ class _AllPagesState extends State<All_pages> {
 
   Future<void> fetchProducts() async {
     final url = Uri.parse(
-        'https://sastabazar.onrender.com/api/user/Products/category/${widget.name}');
+        'http://13.202.96.108/api/user/Products/category/${widget.name}');
     try {
       final response = await http.get(url);
 
@@ -88,13 +79,13 @@ class _AllPagesState extends State<All_pages> {
         });
       } else {
         setState(() {
-          errorMessage = 'We are trying hard to get your products....';
+          errorMessage = 'We are trying hard to get your products....Keep Patience!';
           isLoading = false;
         });
       }
     } catch (error) {
       setState(() {
-        errorMessage = 'Error fetching products: $error';
+        errorMessage = 'We are trying hard to get your products.....Keep Patience!';
         isLoading = false;
       });
     }
@@ -160,8 +151,7 @@ class _AllPagesState extends State<All_pages> {
   @override
   Widget build(BuildContext context) {
     final cart = Provider.of<CartProvider>(context);
-    cartCounterWeb = CartStorageHelper.getCounter();
-
+    final cartWeb = Provider.of<CartStorageHelper>(context);
     if (errorMessage != null) {
       return ErrorPage(
         errorMessage: errorMessage!,
@@ -211,39 +201,49 @@ class _AllPagesState extends State<All_pages> {
                 },
               ),
               actions: [
-                Consumer<CartProvider>(builder: (context, cart, child) {
-                  return IconButton(
-                    icon: badges.Badge(
-                      showBadge: isWeb
-                          ? cartCounterWeb > 0 // Web-specific cart counter
-                          : cart.counter > 0, // Mobile cart counter
-                      badgeContent: Text(
-                        isWeb
-                            ? cartCounterWeb.toString()
-                            : cart.counter.toString(), // Mobile and Web cart count
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      child: const Icon(Icons.shopping_bag_outlined),
-                    ),
-                    onPressed: () async {
-                      final result = await Navigator.push(
+                if (isWeb) ...[
+                  InkWell(
+                    onTap: () {
+                      Navigator.push(
                         context,
-                        MaterialPageRoute(
-                            builder: isWeb
-                                ? (context) => CartScreenWeb()
-                                : (context) => CartScreen()),
+                        _createSlideTransitionRoute(
+                            CartScreenWeb()), // Slide transition for mobile
                       );
-                      // Refresh cartItemsFuture when navigating back from cart screen
-                      if (result != null && result == 'update') {
-                        setState(() {
-                          cartItemsFuture = dbHelper.getCartList(); // Refresh the future
-                          cartCounterWeb=CartStorageHelper.getCounter();
-                        });
-                      }
                     },
-                  );
-                }),
-                const SizedBox(width: 20.0),
+                    child: Center(
+                       child: badges.Badge(
+                        showBadge: cartWeb.counter > 0,
+                        badgeContent: Text(
+                          cartWeb.counter.toString(),
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        child: const Icon(Icons.shopping_bag_outlined),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 20.0),
+                ] else ...[
+                  InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        _createSlideTransitionRoute(
+                            const CartScreen()), // Slide transition for mobile
+                      );
+                    },
+                    child: Center(
+                      child: badges.Badge(
+                        showBadge: cart.counter > 0,
+                        badgeContent: Text(
+                          cart.counter.toString(),
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        child: const Icon(Icons.shopping_bag_outlined),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 20.0),
+                ]
               ],
             ),
           ),
@@ -290,6 +290,7 @@ class _AllPagesState extends State<All_pages> {
                       child: ProductGrid(
                         products: filteredProducts, // Show filtered products
                         dbHelper: dbHelper,
+                        cartWeb: cartWeb,
                         cart: cart,
                         onProductTap: (product) {
                           if (kIsWeb) {
@@ -297,7 +298,7 @@ class _AllPagesState extends State<All_pages> {
                             Navigator.push(
                               context,
                               _createSlideTransitionRoute(
-                                ProductDetailsWebPage(product: product),
+                                ProductDetailsWebPage(product: product,cart: cartWeb),
                               ),
                             );
                           } else {

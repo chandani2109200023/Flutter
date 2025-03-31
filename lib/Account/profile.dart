@@ -1,6 +1,7 @@
+import 'package:agrive_mart/helper/storage_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../homepage/account.dart';
 import '../homepage/home_screen.dart';
 import '../pages/orderpage.dart';
 import 'about.dart';
@@ -24,23 +25,17 @@ class _ProfilePageState extends State<ProfilePage> {
 
   // Function to handle logout and clear all stored data
   Future<void> logoutUser() async {
+  if (kIsWeb) {
+    // Web: Clear session storage
+    await StorageService.clear();
+  } else {
+    // Mobile: Clear SharedPreferences
     SharedPreferences prefs = await SharedPreferences.getInstance();
-
-    // Clear all stored data (token, user info, etc.)
-    await prefs.remove('token');
-    await prefs.remove('userName');
-    await prefs.remove('phoneNumber');
-
-    setState(() {
-      isAuthenticated = false;
-    });
-
-    // Navigate to AccountPage after logout
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => AccountPage()),
-    );
+    await prefs.clear();
   }
+}
+
+
 
   // Custom Page Route with reverse sliding transition (from left to right)
   Route _createReverseSlideTransitionRoute(Widget page) {

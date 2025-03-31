@@ -1,8 +1,10 @@
+import 'package:agrive_mart/helper/storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../components/add_delivery_address_page.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class AddressBookPage extends StatefulWidget {
   final Function(Map<String, dynamic>?)? onAddressSelected;
@@ -52,32 +54,42 @@ class _AddressBookPageState extends State<AddressBookPage> {
     );
   }
 
-  Future<void> _checkLoginStatus() async {
-    try {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      String? savedToken = prefs.getString('token');
-      String? savedUserId = prefs.getString('userId');
+Future<void> _checkLoginStatus() async {
+  try {
+    String? savedToken;
+    String? savedUserId;
 
-      if (savedToken != null && savedUserId != null) {
-        setState(() {
-          token = savedToken;
-          _userId = savedUserId;
-        });
-        fetchAddresses();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please log in first')),
-        );
-      }
-    } catch (e) {
-      print('Error checking login status: $e');
+    if (kIsWeb) {
+      // Get data from localStorage (Web)
+      savedToken = await StorageService.getItem('token');
+      savedUserId = await StorageService.getItem('userId');
+    } else {
+      // Get data from SharedPreferences (Mobile)
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      savedToken = prefs.getString('token');
+      savedUserId = prefs.getString('userId');
     }
+
+    if (savedToken != null && savedUserId != null) {
+      setState(() {
+        token = savedToken!;
+        _userId = savedUserId!;
+      });
+      fetchAddresses();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in first')),
+      );
+    }
+  } catch (e) {
+    print('Error checking login status: $e');
   }
+}
 
   Future<void> fetchAddresses() async {
     if (_userId.isEmpty) return;
 
-    final url = Uri.parse('https://sastabazar.onrender.com/api/address/get/$_userId');
+    final url = Uri.parse('http://13.202.96.108/api/address/get/$_userId');
 
     try {
       final response = await http.get(url, headers: {
@@ -98,7 +110,7 @@ class _AddressBookPageState extends State<AddressBookPage> {
   }
 
   Future<void> updateAddress(String id, Map<String, dynamic> address) async {
-    final url = Uri.parse('https://sastabazar.onrender.com/api/address/$id');
+    final url = Uri.parse('http://13.202.96.108/api/address/$id');
 
     try {
       final response = await http.put(
@@ -130,7 +142,7 @@ class _AddressBookPageState extends State<AddressBookPage> {
   }
 
   Future<void> deleteAddress(String id) async {
-    final url = Uri.parse('https://sastabazar.onrender.com/api/address/delete/$id');
+    final url = Uri.parse('http://13.202.96.108/api/address/delete/$id');
 
     try {
       final response = await http.delete(

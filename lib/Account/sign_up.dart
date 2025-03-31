@@ -19,7 +19,7 @@ class _SignupPageState extends State<SignupPage> {
   bool isLoading = false;
   bool _isPasswordVisible = false; // Manage password visibility
 
-  final String signupUrl = 'https://sastabazar.onrender.com/api/user/register';
+  final String signupUrl = 'http://13.202.96.108/api/user/register';
 
   InputDecoration buildInputDecoration(String hintText, {Widget? suffixIcon}) {
     return InputDecoration(

@@ -1,3 +1,5 @@
+import 'package:agrive_mart/helper/storage_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -33,20 +35,36 @@ class _AddDeliveryAddressPageState extends State<AddDeliveryAddressPage> {
   }
 
   Future<void> _checkLoginStatus() async {
-    try {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      String? savedToken = prefs.getString('token');
-      if (savedToken != null) {
-        setState(() {
-          token = savedToken;
-        });
-      }
-    } catch (e) {
-      print('Error checking login status: $e');
-    }
-  }
+  try {
+    String? savedToken;
+    String? savedUserId;
 
-  final String apiUrl = 'https://sastabazar.onrender.com/api/address/add/';
+    if (kIsWeb) {
+      // Get data from localStorage (Web)
+      savedToken = await StorageService.getItem('token');
+      savedUserId = await StorageService.getItem('userId');
+    } else {
+      // Get data from SharedPreferences (Mobile)
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      savedToken = prefs.getString('token');
+      savedUserId = prefs.getString('userId');
+    }
+
+    if (savedToken != null && savedUserId != null) {
+      setState(() {
+        token = savedToken!;
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in first')),
+      );
+    }
+  } catch (e) {
+    print('Error checking login status: $e');
+  }
+}
+
+  final String apiUrl = 'http://13.202.96.108/api/address/add/';
 
   Future<void> _getCurrentLocation() async {
     bool serviceEnabled;

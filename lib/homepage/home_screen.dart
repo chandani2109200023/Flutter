@@ -1,3 +1,5 @@
+import 'package:agrive_mart/helper/storage_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -43,18 +45,31 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _checkLoginStatus() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? token = prefs.getString('token');
+    try {
+      String? savedUserName;
+      String? savedUserPhoneNumber;
+      bool isLoggedIn = false;
 
-    setState(() {
-      if (token != null && token.isNotEmpty) {
-        _isLoggedIn = true;
-        _userName = prefs.getString('userName') ?? '';
-        _phoneNumber = prefs.getString('phoneNumber') ?? '';
+      if (kIsWeb) {
+        savedUserName = await StorageService.getItem('userName');
+        savedUserPhoneNumber = await StorageService.getItem('phoneNumber');
+        String? isLoggedInString = await StorageService.getItem('isLoggedIn');
+        isLoggedIn = isLoggedInString == "true"; // ✅ Fix
       } else {
-        _isLoggedIn = false;
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        savedUserName = prefs.getString('userName');
+        savedUserPhoneNumber = prefs.getString('phoneNumber');
+        isLoggedIn = prefs.getBool('isLoggedIn') ?? false; // ✅ Fix
       }
-    });
+
+      setState(() {
+        _isLoggedIn = isLoggedIn;
+        _userName = savedUserName ?? '';
+        _phoneNumber = savedUserPhoneNumber ?? '';
+      });
+    } catch (e) {
+      print('⚠️ Error checking login status.....');
+    }
   }
 
   void _updateCartCount(int count) {
@@ -95,28 +110,28 @@ class _HomeScreenState extends State<HomeScreen> {
         extendBodyBehindAppBar: false,
         appBar: _selectedIndex == 0 ? CustomHeader(cartCount: cartCount) : null,
         // body: SafeArea(
-          body: PageView(
-            controller: _pageController,
-            physics: const NeverScrollableScrollPhysics(),
-            children: [
-              SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const CustomSearchBar(),
-                    const BannerCarousel(),
-                    GroceryKitchenGrid(updateCart: _updateCartCount),
-                    SnacksDrinksGrid(updateCart: _updateCartCount),
-                    HouseholdEssentialsGrid(updateCart: _updateCartCount),
-                  ],
-                ),
+        body: PageView(
+          controller: _pageController,
+          physics: const NeverScrollableScrollPhysics(),
+          children: [
+            SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const CustomSearchBar(),
+                  const BannerCarousel(),
+                  GroceryKitchenGrid(updateCart: _updateCartCount),
+                  SnacksDrinksGrid(updateCart: _updateCartCount),
+                  HouseholdEssentialsGrid(updateCart: _updateCartCount),
+                ],
               ),
-              const AllProductsPage(),
-              OrdersAgainPage(),
-              _isLoggedIn
-                  ? ProfilePage(userName: _userName, phoneNumber: _phoneNumber)
-                  : AccountPage(),
-            ],
+            ),
+            const AllProductsPage(),
+            OrdersAgainPage(),
+            _isLoggedIn
+                ? ProfilePage(userName: _userName, phoneNumber: _phoneNumber)
+                : AccountPage(),
+          ],
           // ),
         ),
         bottomNavigationBar: Footer(

@@ -9,17 +9,18 @@ import '../model/cart_model.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:badges/badges.dart' as badges;
-import '../provider/cart_storage_helper.dart';
+import '../provider/cart_storage_web.dart';
 import '../screen/cart_screen_web.dart';
 import '../widgets/product_grid.dart';
-import 'dart:html';
 
 class ProductDetailsWebPage extends StatefulWidget {
   final dynamic product;
+  final CartStorageHelper cart;
 
   const ProductDetailsWebPage({
     super.key,
     required this.product,
+    required this.cart,
   });
 
   @override
@@ -35,6 +36,7 @@ class _ProductDetailsWebPageState extends State<ProductDetailsWebPage> {
   String? errorMessage;
   int? itemCount;
   int cartCounterWeb = 0;
+  CartStorageHelper cartStorageHelper = CartStorageHelper();
 
   @override
   void initState() {
@@ -42,26 +44,14 @@ class _ProductDetailsWebPageState extends State<ProductDetailsWebPage> {
     cartItemsFuture = dbHelper.getCartList();
     fetchSimilarProducts();
     fetchInitialCartCount();
-    cartCounterWeb = CartStorageHelper.getCounter();
-  }
-   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Ensure that the counter is updated when the page is resumed
-    cartCounterWeb = CartStorageHelper.getCounter();
-    setState(() {});
   }
 
-  // Fetch the initial cart count when the product is first displayed
   void fetchInitialCartCount() {
-    final cartItems = _getCartListFromStorage();
+    final cartItems = widget.cart.cartItems;
     final existingItem = cartItems.firstWhere(
-      (item) =>
-          item.productId == (widget.product["id"] is int
-              ? widget.product["id"].toString()
-              : widget.product["id"] ?? ''),
+      (item) => item.productId == widget.product["id"].toString(),
       orElse: () => CartWeb(
-        productId: widget.product["id"] ?? '',
+        productId: widget.product["id"].toString(),
         description: widget.product["description"] ?? '',
         name: widget.product["name"] ?? '',
         stock: widget.product["stock"] ?? 0,
@@ -74,44 +64,22 @@ class _ProductDetailsWebPageState extends State<ProductDetailsWebPage> {
         imageUrl: widget.product["imageUrl"] ?? '',
       ),
     );
-
     setState(() {
       itemCount = existingItem.number;
     });
   }
 
-  // Get cart list from localStorage (simulated by `localStorage` in Dart Web)
-  List<CartWeb> _getCartListFromStorage() {
-    final storedData =
-        window.localStorage['cart'] ?? '[]'; // Get stored cart data
-    final List<dynamic> dataList = jsonDecode(storedData);
-
-    return dataList.map((e) => CartWeb.fromMap(e)).toList();
-  }
-
-  // Save the cart to localStorage
-  void _saveCartToStorage(List<CartWeb> cartItems) {
-    final cartListJson = cartItems.map((item) => item.toMap()).toList();
-    window.localStorage['cart'] = jsonEncode(cartListJson);
-  }
-
-  // Add product to the cart
   Future<void> handleAddToCart() async {
-    try {
-      final cartItems = _getCartListFromStorage();
+    final cartItems = await widget.cart.cartItems;
+    if (cartItems
+        .any((item) => item.productId == widget.product["id"].toString())) {
+      return;
+    }
 
-      // Check if the product already exists in the cart
-      if (cartItems.any((item) =>
-          item.productId == (widget.product["id"] is int
-              ? widget.product["id"].toString()
-              : widget.product["id"] ?? ''))) {
-        return;
-      }
-
-      // Add product to cart
-      cartItems.add(CartWeb(
+    widget.cart.addItem(
+      CartWeb(
         id: null,
-        productId: widget.product["id"] ?? '',
+        productId: widget.product["id"].toString(),
         description: widget.product["description"] ?? '',
         name: widget.product["name"] ?? '',
         stock: widget.product["stock"] ?? 0,
@@ -122,34 +90,27 @@ class _ProductDetailsWebPageState extends State<ProductDetailsWebPage> {
         number: 1,
         discount: widget.product["discount"] ?? 0,
         imageUrl: widget.product["imageUrl"] ?? '',
-      ));
+      ),
+    );
 
-      // Update cart and price
-      CartStorageHelper.addTotalPrice(
-          widget.product["price"].toDouble(), widget.product["discount"]);
-      CartStorageHelper.addCounter();
-
-      // Save to localStorage
-      _saveCartToStorage(cartItems);
-
-      setState(() {
-        itemCount = 1;
-      });
-    } catch (error) {
-      print('Error adding to cart: $error');
-    }
+    widget.cart.addTotalPrice(
+        widget.product["price"].toDouble(), widget.product["discount"]);
+    widget.cart.addCounter();
+    setState(() {
+      itemCount = 1;
+    });
   }
 
-  // Handle quantity changes for the product
   Future<void> handleQuantityChange(bool isIncrement) async {
     try {
       if (itemCount == null) return;
 
-      final cartItems = _getCartListFromStorage();
+      final cartItems = widget.cart.cartItems;
 
       final cartItem = cartItems.firstWhere(
         (item) =>
-            item.productId == (widget.product["id"] is int
+            item.productId ==
+            (widget.product["id"] is int
                 ? widget.product["id"].toString()
                 : widget.product["id"] ?? ''),
       );
@@ -158,33 +119,27 @@ class _ProductDetailsWebPageState extends State<ProductDetailsWebPage> {
 
       if (newNumber < 1) {
         cartItems.removeWhere((item) => item.productId == cartItem.productId);
-        CartStorageHelper.removeCounter();
-        CartStorageHelper.removeTotalPrice(cartItem.price, cartItem.discount);
-
-        _saveCartToStorage(cartItems);
+        widget.cart.removeCounter();
+        widget.cart.removeTotalPrice(cartItem.price, cartItem.discount);
         setState(() {
           itemCount = 0;
         });
       } else if (newNumber <= cartItem.stock) {
-        cartItem.number = newNumber;
+        await widget.cart.updateQuantity(cartItem.productId, newNumber);
+
+        if (isIncrement) {
+          widget.cart.addCounter();
+        } else {
+          widget.cart.removeCounter();
+        }
 
         // Update cart and price
-        CartStorageHelper.updateTotalPrice(
+        widget.cart.updateTotalPrice(
           (cartItem.price * cartItem.number) -
               (cartItem.price * cartItem.number * cartItem.discount * 0.01),
           (cartItem.price * newNumber) -
               (cartItem.price * newNumber * cartItem.discount * 0.01),
         );
-
-        if (isIncrement) {
-          CartStorageHelper.addCounter();
-        } else {
-          CartStorageHelper.removeCounter();
-        }
-
-        // Save to localStorage
-        _saveCartToStorage(cartItems);
-
         setState(() {
           itemCount = newNumber;
         });
@@ -194,10 +149,9 @@ class _ProductDetailsWebPageState extends State<ProductDetailsWebPage> {
     }
   }
 
-
   Future<void> fetchSimilarProducts() async {
     final url = Uri.parse(
-        'https://sastabazar.onrender.com/api/user/Products/category/${widget.product['category']}');
+        'http://13.202.96.108/api/user/Products/category/${widget.product['category']}');
 
     try {
       final response = await http.get(url);
@@ -242,18 +196,17 @@ class _ProductDetailsWebPageState extends State<ProductDetailsWebPage> {
 
   @override
   Widget build(BuildContext context) {
-    cartCounterWeb = CartStorageHelper.getCounter();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Product Details'),
         actions: [
-          Consumer<CartProvider>(
+          Consumer<CartStorageHelper>(
             builder: (context, cart, child) {
               return IconButton(
                 icon: badges.Badge(
-                  showBadge: cartCounterWeb > 0,
+                  showBadge: widget.cart.counter > 0,
                   badgeContent: Text(
-                    cartCounterWeb.toString(),
+                    widget.cart.counter.toString(),
                     style: const TextStyle(color: Colors.white),
                   ),
                   child: const Icon(Icons.shopping_bag_outlined),
@@ -294,6 +247,7 @@ class _ProductDetailsWebPageState extends State<ProductDetailsWebPage> {
   }
 
   Widget buildProductDetails(BuildContext context) {
+    final cartWeb = Provider.of<CartStorageHelper>(context);
     final cart = Provider.of<CartProvider>(context);
     String description =
         widget.product['description'] ?? 'No description available.';
@@ -402,9 +356,57 @@ class _ProductDetailsWebPageState extends State<ProductDetailsWebPage> {
               overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 20),
-           Align(
-                      alignment: Alignment.centerRight,
-                      child: itemCount != null && itemCount! > 0
+            Align(
+              alignment: Alignment.centerRight,
+              child: FutureBuilder<List<CartWeb>>(
+                future: widget.cart.getCartFromLocal(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const CircularProgressIndicator();
+                  }
+
+                  final cartItem = snapshot.data!.firstWhere(
+                    (item) =>
+                        item.productId ==
+                        (widget.product["id"] is int
+                            ? widget.product["id"].toString()
+                            : widget.product["id"]),
+                    orElse: () => CartWeb(
+                      id: null,
+                      productId: widget.product["id"] is int
+                          ? widget.product["id"].toString()
+                          : widget.product["id"],
+                      name: widget.product["name"],
+                      description: widget.product["description"] ?? "",
+                      price: widget.product["price"].toDouble(),
+                      discount: widget.product["discount"] ?? 0,
+                      quantity: widget.product["quantity"] ?? 0,
+                      number: 0,
+                      unit: widget.product["unit"],
+                      stock: widget.product["stock"] ?? 0,
+                      category: widget.product["category"] ?? "",
+                      imageUrl: widget.product["imageUrl"],
+                    ),
+                  );
+
+                  bool isOutOfStock = widget.product["stock"] == 0;
+
+                  return isOutOfStock
+                      ? Container(
+                          height: 35,
+                          width: 100,
+                          decoration: BoxDecoration(
+                            color: Colors.grey,
+                            borderRadius: BorderRadius.circular(5),
+                          ),
+                          child: const Center(
+                            child: Text(
+                              'Out of Stock',
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        )
+                      : cartItem.number > 0
                           ? Container(
                               decoration: BoxDecoration(
                                 color: const Color.fromARGB(255, 175, 116, 76),
@@ -422,7 +424,7 @@ class _ProductDetailsWebPageState extends State<ProductDetailsWebPage> {
                                   ),
                                   const SizedBox(width: 10),
                                   Text(
-                                    itemCount.toString(),
+                                    cartItem.number.toString(),
                                     style: const TextStyle(
                                         color: Colors.white, fontSize: 16),
                                   ),
@@ -439,7 +441,7 @@ class _ProductDetailsWebPageState extends State<ProductDetailsWebPage> {
                               onTap: handleAddToCart,
                               child: Container(
                                 height: 35,
-                                width: 50,
+                                width: 100,
                                 decoration: BoxDecoration(
                                   color:
                                       const Color.fromARGB(255, 175, 116, 76),
@@ -447,13 +449,15 @@ class _ProductDetailsWebPageState extends State<ProductDetailsWebPage> {
                                 ),
                                 child: const Center(
                                   child: Text(
-                                    'Add',
+                                    'Add to cart',
                                     style: TextStyle(color: Colors.white),
                                   ),
                                 ),
                               ),
-                            ),
-                    ),
+                            );
+                },
+              ),
+            ),
             const SizedBox(height: 30),
             const Text(
               'Similar Products',
@@ -483,26 +487,29 @@ class _ProductDetailsWebPageState extends State<ProductDetailsWebPage> {
                                       MaterialPageRoute(
                                         builder: (context) =>
                                             ProductDetailsWebPage(
-                                          product: products[index]
+                                          product: products[index],
+                                          cart: cartWeb,
                                         ),
                                       ),
                                     );
                                   },
                                   child: SizedBox(
                                     width: MediaQuery.of(context).size.width /
-                                        3, // Set the width to half the screen width for two products
+                                        5, // Set the width to half the screen width for two products
                                     child: ProductGrid(
                                       products: [
                                         products[index]
                                       ], // Show only one product at a time
                                       dbHelper: dbHelper,
+                                      cartWeb: cartWeb,
                                       cart: cart,
                                       onProductTap: (product) {
                                         Navigator.push(
                                           context,
                                           _createSlideTransitionRoute(
                                             ProductDetailsWebPage(
-                                              product: product
+                                              product: product,
+                                              cart: cartWeb,
                                             ),
                                           ),
                                         );

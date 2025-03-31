@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'package:agrive_mart/provider/cart_storage_web.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
@@ -6,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../helper/db__helper.dart';
 import '../provider/cart_provider.dart';
 import 'product_details_page.dart';
+import 'product_details_web_page.dart';
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
@@ -20,6 +23,22 @@ class _SearchPageState extends State<SearchPage> {
   final DBHelper dbHelper = DBHelper();
   bool isLoading = false;
   String? errorMessage;
+  Route _createSlideTransitionRoute(Widget page) {
+    return PageRouteBuilder(
+      pageBuilder: (context, animation, secondaryAnimation) => page,
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        const begin = Offset(1.0, 0.0); // Slide from right to left
+        const end = Offset.zero;
+        const curve = Curves.easeInOut;
+
+        var tween =
+            Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+        var offsetAnimation = animation.drive(tween);
+
+        return SlideTransition(position: offsetAnimation, child: child);
+      },
+    );
+  }
 
   // Fetch products from the API and filter them based on the search query
   Future<void> fetchProducts(String query) async {
@@ -28,7 +47,7 @@ class _SearchPageState extends State<SearchPage> {
       errorMessage = null; // Reset error message
     });
 
-    final url = Uri.parse('https://sastabazar.onrender.com/api/user/Products');
+    final url = Uri.parse('http://13.202.96.108/api/user/Products');
     try {
       final response = await http.get(url);
 
@@ -75,6 +94,7 @@ class _SearchPageState extends State<SearchPage> {
   @override
   Widget build(BuildContext context) {
     final cart = Provider.of<CartProvider>(context);
+    final cartWeb = Provider.of<CartStorageHelper>(context);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Search Products'),
@@ -112,16 +132,27 @@ class _SearchPageState extends State<SearchPage> {
                                 title: Text(product['name']),
                                 subtitle: Text('\Rs${product['price']}'),
                                 onTap: () {
-                                  // Navigate to ProductDetailsPage with the selected product data
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => ProductDetailsPage(
-                                        product: product, dbHelper: dbHelper,
-                                        cart: cart, // Pass selected product
+                                  if (kIsWeb) {
+                                    // For web, navigate using the web product details page
+                                    Navigator.push(
+                                      context,
+                                      _createSlideTransitionRoute(
+                                        ProductDetailsWebPage(
+                                            product: product, cart: cartWeb),
                                       ),
-                                    ),
-                                  );
+                                    );
+                                  } else {
+                                    // For mobile, use the existing navigation logic
+                                    Navigator.push(
+                                      context,
+                                      _createSlideTransitionRoute(
+                                          ProductDetailsPage(
+                                        product: product,
+                                        dbHelper: dbHelper,
+                                        cart: cart,
+                                      )),
+                                    );
+                                  }
                                 },
                               );
                             },

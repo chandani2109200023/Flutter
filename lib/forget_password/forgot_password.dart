@@ -15,10 +15,10 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       TextEditingController();
 
   String step = 'sendOtp'; // Tracks the current step
-  final String sendOtpUrl = 'https://sastabazar.onrender.com/api/user/send-otp';
-  final String verifyOtpUrl = 'https://sastabazar.onrender.com/api/user/verify-otp';
+  final String sendOtpUrl = 'http://13.202.96.108/api/user/send-otp';
+  final String verifyOtpUrl = 'http://13.202.96.108/api/user/verify-otp';
   final String resetPasswordUrl =
-      'https://sastabazar.onrender.com/api/user/reset-password';
+      'http://13.202.96.108/api/user/reset-password';
   bool isPasswordVisible = false;
   bool isConfirmPasswordVisible = false;
 

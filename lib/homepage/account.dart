@@ -1,9 +1,14 @@
+import 'package:agrive_mart/helper/storage_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../Account/about.dart';
+import '../Account/account_privacy.dart';
 import '../Account/adress.dart';
 import '../Account/login_page.dart';
+import '../Account/notification_preferences.dart';
 import '../pages/orderpage.dart';
-import 'home_screen.dart'; // Ensure HomeScreen is imported
+import 'home_screen.dart';
 
 class AccountPage extends StatefulWidget {
   @override
@@ -11,23 +16,61 @@ class AccountPage extends StatefulWidget {
 }
 
 class _AccountPageState extends State<AccountPage> {
-  bool isAuthenticated = false;
+  bool _isLoggedIn = false;
+  String _userName = '';
 
-  // Function to handle logout
-  void logoutUser() {
-    setState(() {
-      isAuthenticated = false;
-    });
+  @override
+  void initState() {
+    super.initState();
+    _checkAuthentication();
   }
 
-  // Function to handle login (set to true for authenticated state)
-  void loginUser() {
-    setState(() {
-      isAuthenticated = true;
-    });
+  Future<void> _checkAuthentication() async {
+    try {
+      String? savedUserName;
+      bool isLoggedIn = false;
+
+      if (kIsWeb) {
+        savedUserName = await StorageService.getItem('userName');
+        String? isLoggedInString = await StorageService.getItem('isLoggedIn');
+        isLoggedIn = isLoggedInString == "true"; // ✅ Fix
+      } else {
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        savedUserName = prefs.getString('userName');
+        isLoggedIn = prefs.getBool('isLoggedIn') ?? false; // ✅ Fix
+      }
+
+      setState(() {
+        _isLoggedIn = isLoggedIn;
+        _userName = savedUserName ?? '';
+      });
+    } catch (e) {
+      print('⚠️ Error checking login status.....');
+    }
   }
 
-  // Custom Page Route with sliding transition
+  // ✅ Logout Function (Clears storage for web & mobile)
+  Future<void> logoutUser() async {
+    if (kIsWeb) {
+      await StorageService.clear(); // Web: Clear localStorage
+    } else {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.clear(); // Mobile: Clear SharedPreferences
+    }
+
+    setState(() {
+      _isLoggedIn = false;
+      _userName = "";
+    });
+
+    // Navigate to login page
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => LoginPage()),
+    );
+  }
+
+  // ✅ Slide Transition Effect
   Route _createSlideTransitionRoute(Widget page) {
     return PageRouteBuilder(
       pageBuilder: (context, animation, secondaryAnimation) => page,
@@ -45,60 +88,36 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
-  Route _createReverseSlideTransitionRoute(Widget page) {
-    return PageRouteBuilder(
-      pageBuilder: (context, animation, secondaryAnimation) => page,
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        const begin = Offset(-1.0, 0.0); // Slide from left to right
-        const end = Offset.zero;
-        const curve = Curves.easeInOut;
-
-        var tween =
-            Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-        var offsetAnimation = animation.drive(tween);
-
-        return SlideTransition(position: offsetAnimation, child: child);
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
-        // Navigate to HomeScreen with sliding transition when back button is pressed
+        // Navigate to HomeScreen when back button is pressed
         Navigator.pushAndRemoveUntil(
           context,
-          _createReverseSlideTransitionRoute(
-              HomeScreen()), // Add sliding effect here
-          (Route<dynamic> route) => false, // Remove all previous routes
+          _createSlideTransitionRoute(HomeScreen()),
+          (Route<dynamic> route) => false,
         );
-        return Future.value(
-            false); // Prevent the default back button behavior (closing the app)
+        return Future.value(false);
       },
       child: Scaffold(
         appBar: AppBar(
           title: Text(
             "My Account",
-            style: TextStyle(
-              fontSize: 24, // Increase font size
-              fontWeight: FontWeight.bold, // Make text bold
-            ),
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
           leading: IconButton(
             icon: Icon(Icons.arrow_back),
             onPressed: () {
-              // Navigate to HomeScreen with sliding transition when back arrow is pressed
               Navigator.pushAndRemoveUntil(
                 context,
-                _createReverseSlideTransitionRoute(
-                    HomeScreen()), // Add sliding effect here
-                (Route<dynamic> route) => false, // Remove all previous routes
+                _createSlideTransitionRoute(HomeScreen()),
+                (Route<dynamic> route) => false,
               );
             },
           ),
           flexibleSpace: Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
                   Color(0xFFB2E59C), // Light Green
@@ -111,7 +130,7 @@ class _AccountPageState extends State<AccountPage> {
           ),
         ),
         body: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
                 Color(0xFFB2E59C), // Light Green
@@ -126,47 +145,20 @@ class _AccountPageState extends State<AccountPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                isAuthenticated
-                    ? _buildAuthenticatedView()
-                    : Column(
-                        children: [
-                          Text(
-                            "Login or sign up to view your complete profile",
-                            style: TextStyle(fontSize: 16, color: Colors.grey),
-                          ),
-                          SizedBox(height: 16),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              minimumSize: Size(double.infinity,
-                                  50), // Elongated horizontally
-                              backgroundColor: const Color.fromARGB(
-                                  255, 24, 209, 117), // Light blue color
-                            ),
-                            onPressed: () {
-                              // Navigate to the page where the user chooses between SignIn and SignUp
-                              Navigator.push(
-                                context,
-                                _createSlideTransitionRoute(
-                                    LoginPage()), // Add sliding effect here
-                              );
-                            },
-                            child: Text("Continue"),
-                          ),
-                        ],
-                      ),
-                // Display these sections for all users, even if not authenticated
+                _isLoggedIn ? _buildAuthenticatedView() : _buildGuestView(),
                 SizedBox(height: 20),
                 _buildExpandableSection("Your Information", Icons.person, [
                   _buildOptionRow("Your Orders", Icons.shopping_basket,
-                      isAuthenticated ? OrdersPage() : LoginPage()),
-                  _buildOptionRow(
-                    "Address Book",
-                    Icons.location_on,
-                    isAuthenticated ? AddressBookPage() : LoginPage(),
-                  ),
+                      _isLoggedIn ? OrdersPage() : LoginPage()),
+                  _buildOptionRow("Address Book", Icons.location_on,
+                      _isLoggedIn ? AddressBookPage() : LoginPage()),
                 ]),
                 SizedBox(height: 30),
                 _buildExpandableSection("Other Information", Icons.info, [
+                  _buildOptionRow("Account Privacy", Icons.privacy_tip,
+                      AccountPrivacyPage()),
+                  _buildOptionRow("Notification Preferences",
+                      Icons.notifications, NotificationPreferencesPage()),
                   _buildOptionRow("About Us", Icons.info, AboutUs()),
                 ]),
               ],
@@ -177,23 +169,55 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
-  // Build the view for authenticated users
+  // ✅ View for Logged-in Users
   Widget _buildAuthenticatedView() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Additional authenticated content could go here if needed
         Text(
-          "Welcome back, user!",
+          "Welcome back, $_userName!",
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
         ),
-        // Other authenticated content goes here
         SizedBox(height: 20),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+            minimumSize: Size(double.infinity, 50),
+          ),
+          onPressed: logoutUser, // Logout Function
+          child: Text("Log Out", style: TextStyle(color: Colors.white)),
+        ),
       ],
     );
   }
 
-  // Helper Widget to create an expandable section
+  // ✅ View for Guests (Not Logged-in)
+  Widget _buildGuestView() {
+    return Column(
+      children: [
+        Text(
+          "Login or sign up to view your complete profile",
+          style: TextStyle(fontSize: 16, color: Colors.grey),
+        ),
+        SizedBox(height: 16),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            minimumSize: Size(double.infinity, 50),
+            backgroundColor: Color(0xFF18D175), // Green
+          ),
+          onPressed: () {
+            Navigator.push(
+              context,
+              _createSlideTransitionRoute(LoginPage()),
+            );
+          },
+          child: Text("Continue"),
+        ),
+      ],
+    );
+  }
+
+  // ✅ Expandable Section
   Widget _buildExpandableSection(
       String title, IconData icon, List<Widget> children) {
     return ExpansionTile(
@@ -206,7 +230,7 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
-  // Helper Widget for Displaying Option Row
+  // ✅ Option Row
   Widget _buildOptionRow(String title, IconData icon, Widget page) {
     return ListTile(
       leading: Icon(icon),
@@ -215,7 +239,7 @@ class _AccountPageState extends State<AccountPage> {
       onTap: () {
         Navigator.push(
           context,
-          _createSlideTransitionRoute(page), // Add sliding effect here
+          _createSlideTransitionRoute(page),
         );
       },
     );
